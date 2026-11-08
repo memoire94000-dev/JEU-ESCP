@@ -61,6 +61,11 @@ h1,h2,h3{font-weight:800;line-height:1.15;text-wrap:balance}
 .game h3{font-size:23px;color:var(--c)}
 .game p{color:var(--dim);font-size:16px}
 .section-h{font-size:24px}
+.homeqr{max-width:300px;justify-self:end}
+.homeqr svg{max-width:240px}
+.bests{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.bests span{font-size:13px;padding:3px 10px;border-radius:999px;background:var(--navy2);color:var(--dim)}
+.bests b{color:var(--c);font-variant-numeric:tabular-nums}
 .foot{margin-top:auto;padding-top:24px;color:#93a0d3;font-size:14px;text-align:center}
 .foot button{color:#93a0d3;text-decoration:underline;font-size:14px;padding:6px}
 
@@ -200,6 +205,7 @@ canvas#snake{display:block;touch-action:none;border-radius:12px;border:2px solid
   body{font-size:17px}
   .hero{grid-template-columns:1fr;gap:18px}
   .games{grid-template-columns:1fr}
+  .homeqr{display:none}
   .host{grid-template-columns:1fr}
   .pick{grid-template-columns:repeat(2,minmax(0,1fr))}
   .casier{min-height:112px;font-size:13px}

@@ -4,6 +4,7 @@
   const app = document.getElementById("app");
   const KEYS = ["dates", "escape", "snake", "clic"];
   const qs = new URLSearchParams(location.search);
+  const SOLO_ONLY = location.pathname.replace(/\/$/, "") === "/solo";
 
   /* Typographie française sur tout le texte affiché */
   const fixTypo = (t) => t.replace(/'/g, "\u2019").replace(/ ([:;!?»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
@@ -103,9 +104,31 @@
   function leave() { stopGame(); stopTicker(); if (conn) { conn.close(); conn = null; } setUrl(""); }
 
   /* ---------- Accueil ---------- */
-  function home() {
+  function soloHome() {
     leave();
+    const url = `${location.origin}/solo`;
+    const bests = (k) => LEVELS.map((l, i) => {
+      const b = +store.get(bestKey(k, i), 0);
+      return `<span>${l} <b>${b || "–"}</b></span>`;
+    }).join("");
     view(`<div class="wrap">${header(`<button class="link" id="rec">Classements</button>`)}
+      <section class="hero">
+        <div><h1>L’Arène <em>en solo</em></h1>
+        <p>Choisis un jeu et un niveau, puis bats tes records. Ton pseudo sert au classement général.</p>
+        <div style="max-width:380px;margin-top:16px"><input class="field" id="me" maxlength="16" autocomplete="off" placeholder="Ton pseudo" value="${esc(store.get("arena:pseudo", ""))}" aria-label="Ton pseudo"></div></div>
+        <div class="qr-card homeqr"><div class="lbl">Scanne pour jouer sur ton téléphone</div>${drawQR(url)}</div>
+      </section>
+      <div class="games">${KEYS.map((k) => `<button class="game" style="--c:${INFO[k].c}" data-k="${k}"><h3>${esc(INFO[k].name)}</h3><p>${esc(INFO[k].desc)}</p><div class="bests">${bests(k)}</div></button>`).join("")}</div>
+      ${footer}</div>`);
+    document.getElementById("me").onchange = (e) => store.set("arena:pseudo", e.target.value.trim());
+    document.getElementById("rec").onclick = () => records("clic", 0);
+    app.querySelectorAll(".game").forEach((b) => { b.onclick = () => pickLevel(b.dataset.k); });
+  }
+
+  function home() {
+    if (SOLO_ONLY) return soloHome();
+    leave();
+    view(`<div class="wrap">${header(`<button class="link" id="solo">Mode individuel</button><button class="link" id="rec">Classements</button>`)}
       <section class="hero">
         <div><h1>L’Arène <em>Memorall</em></h1>
         <p>Quatre jeux, quatre niveaux. Joue seul pour battre ton record, ou lance une compétition en direct : chacun scanne le QR code et joue sur son téléphone.</p></div>
@@ -121,6 +144,7 @@
       ${footer}</div>`);
     document.getElementById("jf").onsubmit = (e) => { e.preventDefault(); const c = cleanCode(document.getElementById("code").value); if (c) joinForm(c); };
     document.getElementById("host").onclick = createRoom;
+    document.getElementById("solo").onclick = () => { location.href = "/solo"; };
     document.getElementById("rec").onclick = () => records("clic", 0);
     app.querySelectorAll(".game").forEach((b) => { b.onclick = () => pickLevel(b.dataset.k); });
   }
