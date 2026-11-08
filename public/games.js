@@ -10,6 +10,15 @@ window.Games = (function () {
     clic: { name: "Clic ou pas", c: "#3fdcf7", desc: "Les noms défilent : clique seulement sur ceux qui entrent dans la catégorie." },
   };
 
+  if (D.info) Object.keys(D.info).forEach((k) => Object.assign(INFO[k], D.info[k]));
+  const UI = Object.assign({
+    room: "Tu es enfermé dans la salle des recensements. Chaque casier ouvert donne une lettre de la porte.",
+    mirror: "Le message est écrit en miroir. Quel métier y est caché ?",
+    reverse: "Le message est écrit à l'envers. Quel métier y est caché ?",
+    flip: "Le message est retourné. Quel métier y est caché ?",
+    caisse: "À la caisse, calcule juste. Utilise le pavé numérique.",
+  }, D.ui || {});
+
   const fr = (s) => String(s).replace(/ ([:;!?»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
   const esc = (s) => fr(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -90,6 +99,7 @@ window.Games = (function () {
   function dates(level, seed, m, cb, g) {
     const r = rng(seed ^ 0x9e37);
     const pool = D.dates[level];
+    const datePool = pool.filter(Array.isArray);
     const list = shuffle(pool, r).slice(0, Math.min(30, pool.length));
     const qt = [12000, 8000, 6000, 4000][level];
     let i = 0, streak = 0, score = 0;
@@ -109,15 +119,20 @@ window.Games = (function () {
 
     function question() {
       if (i >= list.length) return finish(true);
-      const [y, ev] = list[i];
-      const eventForm = r() < 0.25;
-      const opts = eventForm
-        ? shuffle([ev, ...shuffle(pool.filter((p) => p[0] !== y), r).slice(0, 3).map((p) => p[1])], r)
-        : options(y).map(yearLabel);
-      const good = eventForm ? ev : yearLabel(y);
+      const item = list[i];
+      const isQcm = !Array.isArray(item);
+      const [y, ev] = isQcm ? [0, ""] : item;
+      const others = isQcm ? [] : datePool.filter((p) => p[0] !== y);
+      const eventForm = !isQcm && others.length >= 3 && r() < 0.25;
+      const opts = isQcm
+        ? shuffle([item.a, ...item.o], r)
+        : eventForm
+          ? shuffle([ev, ...shuffle(others, r).slice(0, 3).map((p) => p[1])], r)
+          : options(y).map(yearLabel);
+      const good = isQcm ? item.a : eventForm ? ev : yearLabel(y);
       m.innerHTML = `<div class="hud"><span>Série <b>${streak}</b></span><span>Question <b>${i + 1}</b> / ${list.length}</span></div>
         <div class="tbar"><i id="tb"></i></div>
-        <div class="q">${eventForm ? `Que s'est-il passé en ${esc(yearLabel(y))} ?` : `En quelle année ?<br>${esc(ev)}`}</div>
+        <div class="q">${isQcm ? esc(item.q) : eventForm ? `Que s'est-il passé en ${esc(yearLabel(y))} ?` : `En quelle année ?<br>${esc(ev)}`}</div>
         <div class="opts">${opts.map((o, n) => `<button class="opt" data-n="${n}">${esc(o)}</button>`).join("")}</div>`;
       const tb = m.querySelector("#tb");
       const start = performance.now();
@@ -163,7 +178,6 @@ window.Games = (function () {
     const r = rng(seed ^ 0x1234);
     const cfg = [{ cats: 3, items: 12, t: 1800 }, { cats: 3, items: 14, t: 1400 }, { cats: 4, items: 14, t: 1000 }, { cats: 4, items: 16, t: 750 }][level];
     const cats = shuffle(D.clic[level], r).slice(0, cfg.cats);
-    const total = cfg.cats * cfg.items;
     let ci = 0, seen = 0, good = 0, score = 0, hits = 0, sumRt = 0, misses = 0, falses = 0;
     const label = () => `${seen ? Math.round((good / seen) * 100) : 0} % · ${hits ? Math.round(sumRt / hits) : "–"} ms`;
 
@@ -221,7 +235,7 @@ window.Games = (function () {
     }
 
     function finish() {
-      const pct = Math.round((good / total) * 100);
+      const pct = seen ? Math.round((good / seen) * 100) : 0;
       const ms = hits ? Math.round(sumRt / hits) : 0;
       const lab = `${pct} % · ${ms || "–"} ms`;
       cb.report(score, lab, true);
@@ -476,7 +490,7 @@ window.Games = (function () {
   }
 
   /* ---------- 4. L'évasion des PCS ---------- */
-  const ICONS = [
+  const ICONS = D.icons || [
     '<path d="M12 21V7m0 0c-1-3 0-5 0-5s3 1 3 5m-3 0c1-3 0-5 0-5s-3 1-3 5m3 8c-3 0-5-2-5-4m5 7c3 0 5-2 5-4"/>',
     '<path d="M3 10h18l-2-6H5zM5 10v10h14V10M9 20v-6h6v6"/>',
     '<path d="M4 8h16v12H4zM9 8V5h6v3M4 13h16"/>',
@@ -511,7 +525,7 @@ window.Games = (function () {
 
     function room() {
       m.innerHTML = `<div class="hud"><span>Chrono <b id="clk">0:00</b></span><span><b>${nSolved()}</b> / 6 casiers</span></div>
-      <div class="door"><div class="small muted">Tu es enfermé dans la salle des recensements. Chaque casier ouvert donne une lettre de la porte.</div>
+      <div class="door"><div class="small muted">${esc(UI.room)}</div>
       <div class="slots">${letters.map((l, i) => `<span>${solved[i] ? l : ""}</span>`).join("")}</div>
       ${nSolved() === 6 ? `<button class="btn primary big" id="final">Ouvrir la porte</button>` : ""}</div>
       <div class="casiers">${D.pcs.map((p, i) => `<button class="casier ${solved[i] ? "solved" : ""}" data-i="${i}"><svg viewBox="0 0 24 24">${ICONS[i]}</svg>${esc(p.k)}${solved[i] ? `<span style="color:var(--green);font-size:18px;font-weight:800">${esc(letters[i])}</span>` : ""}</button>`).join("")}</div>`;
@@ -608,8 +622,7 @@ window.Games = (function () {
     const riddle = (k) => quiz(k, "Qui suis-je ? Choisis la bonne réponse.", set.riddle.items);
     const mirror = (k) => {
       const st = set.mirror.style;
-      const instr = st === "mirror" ? "Le message est écrit en miroir. Quel métier y est caché ?" : st === "reverse" ? "Le message est écrit à l'envers. Quel métier y est caché ?" : "Le message est retourné. Quel métier y est caché ?";
-      quiz(k, instr, set.mirror.items, st);
+      quiz(k, UI[st], set.mirror.items, st);
     };
 
     function anagram(k) {
@@ -655,7 +668,7 @@ window.Games = (function () {
     }
 
     function caisse(k) {
-      const body = shell(k, "À la caisse, calcule juste. Utilise le pavé numérique.");
+      const body = shell(k, UI.caisse);
       let i = 0, val = "";
       const show = () => {
         const it = set.caisse.items[i];

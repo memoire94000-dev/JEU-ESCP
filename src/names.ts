@@ -18,4 +18,7 @@ export function cleanPseudo(raw: unknown): string {
   return words.some((w) => BLOCKED.has(w)) ? "" : text;
 }
 
-export const GAME_CAPS: Record<string, number> = { dates: 5000, escape: 7000, snake: 6000, clic: 12000 };
+export const GAME_CAPS: Record<string, number> = {
+  dates: 5000, escape: 7000, snake: 6000, clic: 12000,
+  "imrt-dates": 5000, "imrt-escape": 7000, "imrt-snake": 6000, "imrt-clic": 12000,
+};

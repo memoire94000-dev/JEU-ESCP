@@ -4,7 +4,12 @@
   const app = document.getElementById("app");
   const KEYS = ["dates", "escape", "snake", "clic"];
   const qs = new URLSearchParams(location.search);
-  const SOLO_ONLY = location.pathname.replace(/\/$/, "") === "/solo";
+  const EDITION = /^\/imrt(\/|$)/.test(location.pathname) ? "imrt" : "escp";
+  const BASE = EDITION === "imrt" ? "/imrt" : "";
+  const HOME_PATH = BASE || "/";
+  const BRAND = EDITION === "imrt" ? "IMRT" : "Memorall";
+  const SOLO_ONLY = location.pathname.slice(BASE.length).replace(/\/$/, "") === "/solo";
+  const recordKey = (k) => (EDITION === "imrt" ? `imrt-${k}` : k);
 
   /* Typographie française sur tout le texte affiché */
   const fixTypo = (t) => t.replace(/'/g, "\u2019").replace(/ ([:;!?»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
@@ -84,7 +89,14 @@
         if (e.data === "__pong") return;
         let m;
         try { m = JSON.parse(e.data); } catch (err) { return; }
-        if (m.type === "state") { if (m.now) self.clock = m.now - Date.now(); onState(m.view, self); }
+        if (m.type === "state") {
+          if (m.now) self.clock = m.now - Date.now();
+          if (m.view && m.view.exists && m.view.edition !== EDITION) {
+            location.replace(`${m.view.edition === "imrt" ? "/imrt" : "/"}?salle=${code}`);
+            return;
+          }
+          onState(m.view, self);
+        }
         else if (m.type === "error") onError(m.error);
       };
       ws.onclose = () => {
@@ -106,14 +118,14 @@
   /* ---------- Accueil ---------- */
   function soloHome() {
     leave();
-    const url = `${location.origin}/solo`;
+    const url = `${location.origin}${BASE}/solo`;
     const bests = (k) => LEVELS.map((l, i) => {
       const b = +store.get(bestKey(k, i), 0);
       return `<span>${l} <b>${b || "–"}</b></span>`;
     }).join("");
     view(`<div class="wrap">${header(`<button class="link" id="rec">Classements</button>`)}
       <section class="hero">
-        <div><h1>L’Arène <em>en solo</em></h1>
+        <div><h1>L’Arène${EDITION === "imrt" ? " IMRT" : ""} <em>en solo</em></h1>
         <p>Choisis un jeu et un niveau, puis bats tes records. Ton pseudo sert au classement général.</p>
         <div style="max-width:380px;margin-top:16px"><input class="field" id="me" maxlength="16" autocomplete="off" placeholder="Ton pseudo" value="${esc(store.get("arena:pseudo", ""))}" aria-label="Ton pseudo"></div></div>
         <div class="qr-card homeqr"><div class="lbl">Scanne pour jouer sur ton téléphone</div>${drawQR(url)}</div>
@@ -130,7 +142,7 @@
     leave();
     view(`<div class="wrap">${header(`<button class="link" id="solo">Mode individuel</button><button class="link" id="rec">Classements</button>`)}
       <section class="hero">
-        <div><h1>L’Arène <em>Memorall</em></h1>
+        <div><h1>L’Arène <em>${BRAND}</em></h1>
         <p>Quatre jeux, quatre niveaux. Joue seul pour battre ton record, ou lance une compétition en direct : chacun scanne le QR code et joue sur son téléphone.</p></div>
         <form class="join" id="jf">
           <h2>Rejoindre une compétition</h2>
@@ -144,7 +156,7 @@
       ${footer}</div>`);
     document.getElementById("jf").onsubmit = (e) => { e.preventDefault(); const c = cleanCode(document.getElementById("code").value); if (c) joinForm(c); };
     document.getElementById("host").onclick = createRoom;
-    document.getElementById("solo").onclick = () => { location.href = "/solo"; };
+    document.getElementById("solo").onclick = () => { location.href = `${BASE}/solo`; };
     document.getElementById("rec").onclick = () => records("clic", 0);
     app.querySelectorAll(".game").forEach((b) => { b.onclick = () => pickLevel(b.dataset.k); });
   }
@@ -173,7 +185,7 @@
       end(res) { soloEnd(k, l, res); },
     });
   }
-  function bestKey(k, l) { return `arena:best:${k}:${l}`; }
+  function bestKey(k, l) { return `arena:best:${recordKey(k)}:${l}`; }
   function soloEnd(k, l, res) {
     stopGame();
     const prev = +store.get(bestKey(k, l), 0);
@@ -207,7 +219,7 @@
       store.set("arena:pseudo", pseudo);
       msg.textContent = "Envoi…";
       try {
-        const r = await fetch("/api/records", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ g: k, l, pseudo, score: res.score, label: res.label }) });
+        const r = await fetch("/api/records", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ g: recordKey(k), l, pseudo, score: res.score, label: res.label }) });
         const j = await r.json();
         if (!r.ok) { msg.textContent = r.status === 400 ? "Ce pseudo n'est pas accepté, choisis-en un autre." : "Attends une seconde et réessaie."; return; }
         form.innerHTML = `<h2>${j.rank ? `Tu es ${j.rank}${j.rank === 1 ? "er" : "e"} du classement` : "Score enregistré, mais hors du top 20"}</h2>`;
@@ -221,7 +233,7 @@
   async function loadList(el, k, l) {
     el.innerHTML = `<div class="muted">Chargement…</div>`;
     try {
-      const r = await fetch(`/api/records?g=${k}&l=${l}`);
+      const r = await fetch(`/api/records?g=${recordKey(k)}&l=${l}`);
       const j = await r.json();
       renderList(el, j.list || []);
     } catch (e) { el.innerHTML = `<div class="muted">Classement indisponible pour le moment.</div>`; }
@@ -370,7 +382,7 @@
     view(`<div class="wrap wide">${header(homeBtn)}<div class="center"><div class="badge">Ouverture de la salle…</div></div></div>`);
     conn = Connection(code, (v, c) => {
       if (!v) return;
-      if (!v.exists && !asked) { asked = true; c.send({ t: "create" }); return; }
+      if (!v.exists && !asked) { asked = true; c.send({ t: "create", edition: EDITION }); return; }
       if (v.role === "host") renderHost(code, v, c);
       else if (v.exists) { leave(); joinForm(code); }
     }, () => {});
@@ -385,7 +397,7 @@
   }
 
   function paintHost(code, v, c) {
-    const url = `${location.origin}/?salle=${code}`;
+    const url = `${location.origin}${HOME_PATH}?salle=${code}`;
     if (v.phase === "lobby") {
       view(`<div class="wrap wide">${header(homeBtn)}
         <div class="host">

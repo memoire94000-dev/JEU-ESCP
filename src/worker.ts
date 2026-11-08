@@ -34,7 +34,8 @@ export default {
     }
 
     if (request.method === "GET" && request.headers.get("Accept")?.includes("text/html")) {
-      return env.ASSETS.fetch(new Request(new URL("/", url), request));
+      const home = /^\/imrt(\/|$)/.test(url.pathname) ? "/imrt" : "/";
+      return env.ASSETS.fetch(new Request(new URL(home, url), request));
     }
     return new Response("not found", { status: 404 });
   },

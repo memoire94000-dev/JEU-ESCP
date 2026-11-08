@@ -113,7 +113,7 @@ export function applyAction(s, id, a) {
       return s;
     }
     case "create":
-      return { ...s, host: id, expireAt: at + DAY, deadline: s.deadline || at + DAY };
+      return { ...s, host: id, edition: a.edition === "imrt" ? "imrt" : "escp", expireAt: at + DAY, deadline: s.deadline || at + DAY };
     case "hello": {
       const prev = s.players[id];
       const pseudo = uniquePseudo(s, id, a.pseudo.trim().slice(0, 16));
@@ -185,6 +185,7 @@ export function viewFor(s, id) {
   const rank = me ? list.findIndex((p) => p.id === id) + 1 : 0;
   const base = {
     exists: !!s.host,
+    edition: s.edition || "escp",
     role: isHost ? "host" : me ? "player" : s.banned[id] ? "banned" : "new",
     phase: s.phase, round: s.round, game: s.game, level: s.level, seed: s.seed,
     startAt: s.startAt, endsAt: s.endsAt, count: list.length,
