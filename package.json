@@ -1,0 +1,8 @@
+{
+  "name": "jeu-escp",
+  "private": true,
+  "type": "module",
+  "author": "Memorall",
+  "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy" },
+  "devDependencies": { "wrangler": "4.118.0" }
+}
