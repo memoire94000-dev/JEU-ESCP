@@ -5,8 +5,9 @@
 
 import type { Env } from "./env";
 import { Room } from "./room";
+import { DscgSalon, DscgRecords, dscgFetch } from "./dscg.js";
 
-export { Room };
+export { Room, DscgSalon, DscgRecords };
 
 const WS_PREFIX = "/ws";
 const ROOM_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -16,6 +17,9 @@ const RECORDS_ROOM = "__records";
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    const dscg = dscgFetch(request, env);
+    if (dscg) return dscg;
 
     if (url.pathname === "/api/records") {
       return env.ROOMS.get(env.ROOMS.idFromName(RECORDS_ROOM)).fetch(request);
@@ -34,7 +38,7 @@ export default {
     }
 
     if (request.method === "GET" && request.headers.get("Accept")?.includes("text/html")) {
-      const home = /^\/imrt(\/|$)/.test(url.pathname) ? "/imrt" : "/";
+      const home = /^\/imrt(\/|$)/.test(url.pathname) ? "/imrt" : /^\/dscg(\/|$)/.test(url.pathname) ? "/dscg/" : "/";
       return env.ASSETS.fetch(new Request(new URL(home, url), request));
     }
     return new Response("not found", { status: 404 });
