@@ -2,14 +2,16 @@
 (function () {
   const { start: startGame, LEVELS, INFO, esc, fr, Sfx, fmt } = window.Games;
   const app = document.getElementById("app");
-  const KEYS = ["dates", "escape", "snake", "clic"];
+  const KEYS = window.ARENA_DATA.keys || ["dates", "escape", "snake", "clic"];
   const qs = new URLSearchParams(location.search);
-  const EDITION = /^\/imrt(\/|$)/.test(location.pathname) ? "imrt" : "escp";
-  const BASE = EDITION === "imrt" ? "/imrt" : "";
+  const EDITIONS = { imrt: "IMRT", prepa: "Prépa" };
+  const EDITION = (location.pathname.match(/^\/(imrt|prepa)(\/|$)/) || [])[1] || "escp";
+  const editionHome = (e) => (EDITIONS[e] ? `/${e}` : "/");
+  const BASE = EDITIONS[EDITION] ? `/${EDITION}` : "";
   const HOME_PATH = BASE || "/";
-  const BRAND = EDITION === "imrt" ? "IMRT" : "Memorall";
+  const BRAND = EDITIONS[EDITION] || "Memorall";
   const SOLO_ONLY = location.pathname.slice(BASE.length).replace(/\/$/, "") === "/solo";
-  const recordKey = (k) => (EDITION === "imrt" ? `imrt-${k}` : k);
+  const recordKey = (k) => (EDITIONS[EDITION] ? `${EDITION}-${k}` : k);
 
   /* Typographie française sur tout le texte affiché */
   const fixTypo = (t) => t.replace(/'/g, "\u2019").replace(/ ([:;!?»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
@@ -92,7 +94,7 @@
         if (m.type === "state") {
           if (m.now) self.clock = m.now - Date.now();
           if (m.view && m.view.exists && m.view.edition !== EDITION) {
-            location.replace(`${m.view.edition === "imrt" ? "/imrt" : "/"}?salle=${code}`);
+            location.replace(`${editionHome(m.view.edition)}?salle=${code}`);
             return;
           }
           onState(m.view, self);
@@ -125,7 +127,7 @@
     }).join("");
     view(`<div class="wrap">${header(`<button class="link" id="rec">Classements</button>`)}
       <section class="hero">
-        <div><h1>L’Arène${EDITION === "imrt" ? " IMRT" : ""} <em>en solo</em></h1>
+        <div><h1>L’Arène${EDITIONS[EDITION] ? " " + BRAND : ""} <em>en solo</em></h1>
         <p>Choisis un jeu et un niveau, puis bats tes records. Ton pseudo sert au classement général.</p>
         <div style="max-width:380px;margin-top:16px"><input class="field" id="me" maxlength="16" autocomplete="off" placeholder="Ton pseudo" value="${esc(store.get("arena:pseudo", ""))}" aria-label="Ton pseudo"></div></div>
         <div class="qr-card homeqr"><div class="lbl">Scanne pour jouer sur ton téléphone</div>${drawQR(url)}</div>
@@ -315,7 +317,7 @@
           flush();
           stopGame();
           shownKey = "wait" + v.round;
-          view(`<div class="wrap narrow">${header("")}<div class="center"><div class="badge">${esc(INFO[v.game].name)}</div><div class="resultN">${esc(res.big)}</div><div style="font-weight:700">${esc(res.unit)}</div><div class="muted">${res.score} points</div><div class="muted">Regarde le grand écran : le classement arrive.</div></div>${footer}</div>`);
+          view(`<div class="wrap narrow">${header("")}<div class="center"><div class="badge">${esc(INFO[v.game].name)}</div><div class="resultN">${esc(res.big)}</div><div style="font-weight:700">${esc(res.unit)}</div><div class="muted">${res.score} points</div>${res.note ? `<div class="muted small">${esc(res.note)}</div>` : ""}<div class="muted">Regarde le grand écran : le classement arrive.</div></div>${footer}</div>`);
         },
       });
     }

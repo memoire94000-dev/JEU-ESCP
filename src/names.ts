@@ -21,4 +21,5 @@ export function cleanPseudo(raw: unknown): string {
 export const GAME_CAPS: Record<string, number> = {
   dates: 5000, escape: 7000, snake: 6000, clic: 12000,
   "imrt-dates": 5000, "imrt-escape": 7000, "imrt-snake": 6000, "imrt-clic": 12000,
+  "prepa-dates": 5000, "prepa-pendu": 10000, "prepa-snake": 6000, "prepa-clic": 12000,
 };

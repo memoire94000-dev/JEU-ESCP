@@ -38,7 +38,8 @@ export default {
     }
 
     if (request.method === "GET" && request.headers.get("Accept")?.includes("text/html")) {
-      const home = /^\/imrt(\/|$)/.test(url.pathname) ? "/imrt" : /^\/dscg(\/|$)/.test(url.pathname) ? "/dscg/" : "/";
+      const edition = url.pathname.match(/^\/(imrt|prepa)(\/|$)/);
+      const home = edition ? `/${edition[1]}` : /^\/dscg(\/|$)/.test(url.pathname) ? "/dscg/" : "/";
       return env.ASSETS.fetch(new Request(new URL(home, url), request));
     }
     return new Response("not found", { status: 404 });

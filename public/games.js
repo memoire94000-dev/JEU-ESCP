@@ -8,9 +8,10 @@ window.Games = (function () {
     escape: { name: "L'évasion des PCS", c: "#a585ff", desc: "Six casiers, six énigmes sur les catégories socioprofessionnelles, une porte à ouvrir." },
     snake: { name: "Le serpent des figures", c: "#46e3a8", desc: "Dirige le serpent et mange les bonnes syllabes pour écrire la figure de style." },
     clic: { name: "Clic ou pas", c: "#3fdcf7", desc: "Les noms défilent : clique seulement sur ceux qui entrent dans la catégorie." },
+    pendu: { name: "Le pendu", c: "#a585ff", desc: "Complète les phrases à trous avant la fin du temps. Chaque mauvaise lettre coûte des points." },
   };
 
-  if (D.info) Object.keys(D.info).forEach((k) => Object.assign(INFO[k], D.info[k]));
+  if (D.info) Object.keys(D.info).forEach((k) => { INFO[k] = Object.assign(INFO[k] || { c: "#a585ff" }, D.info[k]); });
   const UI = Object.assign({
     room: "Tu es enfermé dans la salle des recensements. Chaque casier ouvert donne une lettre de la porte.",
     mirror: "Le message est écrit en miroir. Quel métier y est caché ?",
@@ -88,6 +89,7 @@ window.Games = (function () {
   }
 
   function flash(root, text, bad) {
+    root.querySelectorAll(".flash").forEach((x) => x.remove());
     const n = document.createElement("div");
     n.className = "flash" + (bad ? " bad" : "");
     n.textContent = fr(text);
@@ -176,7 +178,10 @@ window.Games = (function () {
   /* ---------- 2. Clic ou pas ---------- */
   function clic(level, seed, m, cb, g) {
     const r = rng(seed ^ 0x1234);
-    const cfg = [{ cats: 3, items: 12, t: 1800 }, { cats: 3, items: 14, t: 1400 }, { cats: 4, items: 14, t: 1000 }, { cats: 4, items: 16, t: 750 }][level];
+    const quotes = !!D.clicQuotes;
+    const cfg = (D.clicCfg || [{ cats: 3, items: 12, t: 1800 }, { cats: 3, items: 14, t: 1400 }, { cats: 4, items: 14, t: 1000 }, { cats: 4, items: 16, t: 750 }])[level];
+    const itemTime = (it) => (quotes ? cfg.base + cfg.per * it.t.length : cfg.t);
+    const toItem = (c, x, yes) => (typeof x === "string" ? { t: x, y: yes, a: yes ? c.a : "" } : { t: x.t, a: x.a, y: yes });
     const cats = shuffle(D.clic[level], r).slice(0, cfg.cats);
     let ci = 0, seen = 0, good = 0, score = 0, hits = 0, sumRt = 0, misses = 0, falses = 0;
     const label = () => `${seen ? Math.round((good / seen) * 100) : 0} % · ${hits ? Math.round(sumRt / hits) : "–"} ms`;
@@ -187,9 +192,10 @@ window.Games = (function () {
       const nYes = Math.max(2, Math.round(cfg.items * 0.42));
       const yes = shuffle(c.y, r).slice(0, Math.min(nYes, c.y.length));
       const no = shuffle(c.n, r).slice(0, cfg.items - yes.length);
-      const items = shuffle([...yes.map((t) => ({ t, y: true })), ...no.map((t) => ({ t, y: false }))], r);
+      const items = shuffle([...yes.map((x) => toItem(c, x, true)), ...no.map((x) => toItem(c, x, false))], r);
       m.innerHTML = `<div class="hud"><span>Catégorie <b>${ci + 1}</b> / ${cats.length}</span><span>${esc(label())}</span></div>
-        <div class="stage" id="st"><div><div class="muted small">Clique seulement sur</div><div class="cat">${esc(c.k)}</div></div></div>`;
+        <div class="stage" id="st"><div><div class="muted small">${quotes ? "Clique seulement sur les citations de" : "Clique seulement sur"}</div><div class="cat">${esc(c.k)}</div></div></div>
+        ${quotes ? `<div class="tbar"><i id="qb"></i></div>` : ""}`;
       ci++;
       g.t(() => run(items, c, 0), 2600);
     }
@@ -200,8 +206,17 @@ window.Games = (function () {
       const st = m.querySelector("#st");
       const hud = m.querySelector(".hud");
       hud.innerHTML = `<span class="small">Clique si : <b style="font-size:16px">${esc(c.k)}</b></span><span class="small">${idx + 1}/${items.length}</span>`;
-      st.className = "stage";
-      st.textContent = fr(it.t);
+      const T = itemTime(it);
+      st.className = quotes ? "stage quote" : "stage";
+      st.textContent = fr(quotes ? `« ${it.t} »` : it.t);
+      const qb = m.querySelector("#qb");
+      if (qb) {
+        qb.style.transition = "none";
+        qb.style.width = "100%";
+        void qb.offsetWidth;
+        qb.style.transition = `width ${T}ms linear`;
+        qb.style.width = "0%";
+      }
       let tapped = false;
       const t0 = performance.now();
       const tap = () => {
@@ -210,7 +225,7 @@ window.Games = (function () {
         if (it.y) {
           const rt = performance.now() - t0;
           hits++; good++; sumRt += rt;
-          score += 100 + Math.round(60 * Math.max(0, 1 - rt / cfg.t));
+          score += 100 + Math.round(60 * Math.max(0, 1 - rt / T));
           st.classList.add("hit");
           Sfx.ok();
         } else {
@@ -229,9 +244,14 @@ window.Games = (function () {
         if (it.y && !tapped) { misses++; st.classList.add("bad"); }
         seen++;
         cb.report(score, label());
+        if (quotes && it.a) {
+          st.innerHTML = `<span class="who">${esc(it.a)}</span>`;
+          g.t(() => { st.className = "stage quote"; st.textContent = ""; run(items, c, idx + 1); }, 650);
+          return;
+        }
         st.textContent = "";
         g.t(() => { st.className = "stage"; run(items, c, idx + 1); }, 180);
-      }, cfg.t);
+      }, T);
     }
 
     function finish() {
@@ -267,7 +287,7 @@ window.Games = (function () {
     const t0 = performance.now();
     const fig = () => figs[figIdx];
     const ex = () => fig().e[Math.floor(figIdx * 7 + seed) % fig().e.length];
-    const promptText = () => (level < 2 ? fig().d : ex());
+    const promptText = () => (level < 2 || !fig().e ? fig().d : ex());
     const label = () => `${foundN} figure${foundN > 1 ? "s" : ""}`;
 
     m.innerHTML = `<div class="sn">
@@ -767,7 +787,154 @@ window.Games = (function () {
     room();
   }
 
-  const IMPL = { dates, clic, snake, escape };
+  /* ---------- 5. Le pendu ---------- */
+  function pendu(level, seed, m, cb, g) {
+    const r = rng(seed ^ 0x5eed);
+    const pool = D.pendu.filter((p) => (level === 0 ? p.l === 0 : level === 1 ? p.l <= 1 : level === 2 ? p.l === 1 || p.l === 2 : p.l >= 2));
+    const words = shuffle(pool, r);
+    const limit = [240, 210, 180, 150][level];
+    const maxErr = [8, 7, 6, 6][level];
+    const GOOD = 100, BAD = 3, PARTS = 8;
+    const ROWS = ["AZERTYUIOP", "QSDFGHJKLM", "WXCVBN"];
+    const base = (c) => c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const isLetter = (c) => /^[A-Z]$/.test(base(c));
+    let wi = 0, score = 0, wrongTotal = 0, repeats = 0, ended = false, locked = false;
+    let w = null, used = new Set(), errors = 0;
+    const found = [];
+    const t0 = performance.now();
+    const pts = () => Math.max(0, score);
+    const label = () => `${found.length} mot${found.length > 1 ? "s" : ""}`;
+
+    m.innerHTML = `<div class="pendu">
+      <div class="hud"><span>Mots <b id="pf">0</b></span><span><b id="ps">0</b> pts</span><span id="pt"></span></div>
+      <div class="pd-top">
+        <svg class="gallows" viewBox="0 0 120 130" aria-hidden="true">
+          <path class="gp" d="M10 122h70"/><path class="gp" d="M28 122V10"/><path class="gp" d="M28 10h56"/><path class="gp" d="M84 10v16"/>
+          <circle class="gp" cx="84" cy="38" r="12"/><path class="gp" d="M84 50v34"/><path class="gp" d="M84 60l-15 13M84 60l15 13"/><path class="gp" d="M84 84l-13 20M84 84l13 20"/>
+        </svg>
+        <div class="pd-q"><div class="pd-m" id="pm"></div><div id="pq"></div></div>
+      </div>
+      <div class="answer pd-word" id="pw"></div>
+      <div class="pd-life small muted" id="pl"></div>
+      <div class="kb">${ROWS.map((row) => `<div>${row.split("").map((ch) => `<button class="key" data-k="${ch}">${ch}</button>`).join("")}</div>`).join("")}</div>
+    </div>`;
+    const parts = [...m.querySelectorAll(".gp")];
+    const keys = [...m.querySelectorAll(".key")];
+
+    function hud() {
+      m.querySelector("#pf").textContent = found.length;
+      m.querySelector("#ps").textContent = pts();
+      const left = maxErr - errors;
+      m.querySelector("#pl").textContent = left <= 0 ? "Pendu !" : fr(`Encore ${left} erreur${left > 1 ? "s" : ""} possible${left > 1 ? "s" : ""} sur ce mot`);
+      const shown = Math.ceil((errors / maxErr) * PARTS);
+      parts.forEach((p, i) => p.classList.toggle("on", i < shown));
+    }
+    function drawWord(state) {
+      const el = m.querySelector("#pw");
+      el.className = "answer pd-word" + (w.a.length > 11 ? " long" : "") + (state ? " " + state : "");
+      el.innerHTML = w.a.split("").map((ch) => {
+        if (!isLetter(ch)) return `<span class="sp">${ch === " " ? "" : esc(ch)}</span>`;
+        return `<span>${state || used.has(base(ch)) ? esc(ch) : ""}</span>`;
+      }).join("");
+    }
+    function sentence(fill) {
+      const gap = fill ? `<span class="gap full">${esc(fill)}</span>` : `<span class="gap"></span>`;
+      m.querySelector("#pq").innerHTML = esc(w.t).replace(/(\S*)___(\S*)/, (_, a, b) => `<span class="nw">${a}${gap}${b}</span>`);
+    }
+    function next() {
+      if (ended) return;
+      if (wi >= words.length) return finish(true);
+      w = words[wi++];
+      used = new Set();
+      errors = 0;
+      locked = false;
+      keys.forEach((k) => { k.className = "key"; });
+      m.querySelector("#pm").textContent = w.m || "";
+      sentence("");
+      drawWord("");
+      hud();
+    }
+    function solved() { return w.a.split("").every((ch) => !isLetter(ch) || used.has(base(ch))); }
+    function press(k) {
+      if (ended || locked || !w) return;
+      const btn = keys.find((b) => b.dataset.k === k);
+      if (used.has(k)) {
+        score -= BAD;
+        repeats++;
+        Sfx.ko();
+        flash(m, `Lettre ${k} déjà jouée : −${BAD}`, true);
+        if (btn) { btn.classList.remove("shake"); void btn.offsetWidth; btn.classList.add("shake"); }
+        hud();
+        cb.report(pts(), label());
+        return;
+      }
+      used.add(k);
+      const hit = w.a.split("").some((ch) => isLetter(ch) && base(ch) === k);
+      if (btn) btn.classList.add(hit ? "ok" : "bad");
+      if (hit) {
+        Sfx.ok();
+        drawWord("");
+        if (solved()) {
+          score += GOOD;
+          found.push(w.a);
+          locked = true;
+          Sfx.win();
+          flash(m, `+${GOOD} : ${w.a}`);
+          sentence(w.a);
+          drawWord("won");
+          hud();
+          cb.report(pts(), label());
+          g.t(next, 1100);
+          return;
+        }
+      } else {
+        errors++;
+        wrongTotal++;
+        score -= BAD;
+        Sfx.ko();
+        if (errors >= maxErr) {
+          locked = true;
+          hud();
+          flash(m, `Pendu ! Le mot était ${w.a}`, true);
+          sentence(w.a);
+          drawWord("lost");
+          cb.report(pts(), label());
+          g.t(next, 1900);
+          return;
+        }
+      }
+      hud();
+      cb.report(pts(), label());
+    }
+    keys.forEach((b) => g.on(b, "click", () => press(b.dataset.k)));
+    g.on(window, "keydown", (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || !e.key || e.key.length !== 1) return;
+      const k = base(e.key);
+      if (/^[A-Z]$/.test(k)) { e.preventDefault(); press(k); }
+    });
+
+    function finish(all) {
+      if (ended) return;
+      ended = true;
+      const total = pts();
+      const lab = label();
+      const list = found.length ? `Mots trouvés : ${found.join(", ")}.` : "Aucun mot trouvé.";
+      const errs = `${wrongTotal} mauvaise${wrongTotal > 1 ? "s" : ""} lettre${wrongTotal > 1 ? "s" : ""}, ${repeats} lettre${repeats > 1 ? "s" : ""} rejouée${repeats > 1 ? "s" : ""}.`;
+      cb.report(total, lab, true);
+      cb.end({ score: total, label: lab, big: String(found.length), unit: found.length > 1 ? "mots trouvés" : "mot trouvé", note: `${list} ${errs}${all ? " Tu as épuisé la liste de mots." : ""}` });
+    }
+
+    next();
+    g.frame(() => {
+      if (ended) return false;
+      const left = limit - (performance.now() - t0) / 1000;
+      const el = m.querySelector("#pt");
+      if (el) el.textContent = fmt(Math.max(0, left));
+      if (left <= 0) { finish(false); return false; }
+    });
+  }
+
+  const IMPL = { dates, clic, snake, escape, pendu };
 
   function start(key, level, seed, mount, cb) {
     const g = kit();

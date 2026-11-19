@@ -5,14 +5,19 @@
 
 export const meta = { game: "Arène Memorall", minPlayers: 1, maxPlayers: 250 };
 
-const GAMES = ["dates", "escape", "snake", "clic"];
-const MAX_SCORE = { dates: 5000, escape: 7000, snake: 6000, clic: 12000 };
+const GAMES = ["dates", "escape", "snake", "clic", "pendu"];
+const EDITIONS = ["escp", "imrt", "prepa"];
+const MAX_SCORE = { dates: 5000, escape: 7000, snake: 6000, clic: 12000, pendu: 10000 };
 const DURATION = {
   dates: [300, 240, 180, 130],
   escape: [480, 600, 720, 900],
   snake: [170, 170, 190, 190],
   clic: [100, 100, 100, 100],
+  pendu: [250, 220, 190, 160],
 };
+/* Les citations de l'édition Prépa se lisent plus lentement que des noms. */
+const DURATION_BY_EDITION = { prepa: { clic: [220, 210, 190, 170] } };
+const durationOf = (edition, game, level) => ((DURATION_BY_EDITION[edition] || {})[game] || DURATION[game])[level];
 const COUNTDOWN = 5000;
 const DAY = 86400000;
 const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
@@ -113,7 +118,7 @@ export function applyAction(s, id, a) {
       return s;
     }
     case "create":
-      return { ...s, host: id, edition: a.edition === "imrt" ? "imrt" : "escp", expireAt: at + DAY, deadline: s.deadline || at + DAY };
+      return { ...s, host: id, edition: EDITIONS.includes(a.edition) ? a.edition : "escp", expireAt: at + DAY, deadline: s.deadline || at + DAY };
     case "hello": {
       const prev = s.players[id];
       const pseudo = uniquePseudo(s, id, a.pseudo.trim().slice(0, 16));
@@ -134,7 +139,7 @@ export function applyAction(s, id, a) {
       const seed = (Math.floor(at / 7) ^ (round * 2654435761)) >>> 0;
       return {
         ...s, phase: "countdown", round, game: a.game, level: a.level, seed,
-        startAt, endsAt: startAt + DURATION[a.game][a.level] * 1000,
+        startAt, endsAt: startAt + durationOf(s.edition, a.game, a.level) * 1000,
         deadline: startAt, expireAt: at + DAY, players, last: [],
       };
     }
